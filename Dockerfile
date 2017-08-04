@@ -43,56 +43,67 @@ RUN apt-get --no-install-recommends -y install \
     libltdl-dev \
     gsl-bin \
     libgsl-dev \
-    # (commented out ?temporarily? because docker complains) libgsl2 \
+    libgsl2 \
     hwloc \
     libhwloc-dev \
     libboost1.58-all-dev \
     pkg-config \
-    cmake
+    cmake \
+    libtool \
+    expect
 
 ENV PSRHOME /software/
 ENV OSTYPE linux
 RUN mkdir -p $PSRHOME
 WORKDIR $PSRHOME
 
+RUN apt-get install lsof
+
 # (removed) Install PSRDADA
-#COPY psrdada_cvs_login $PSRHOME
-#RUN  chmod +x psrdada_cvs_login &&\
-#    ./psrdada_cvs_login && \
-#    cvs -z3 -d:pserver:anonymous@psrdada.cvs.sourceforge.net:/cvsroot/psrdada co -P psrdada
-#ENV PSRDADA_HOME $PSRHOME/psrdada
-#WORKDIR $PSRDADA_HOME
-#RUN mkdir build/ && \
-#    ./bootstrap && \
-#    ./configure --prefix=$PSRDADA_HOME/build && \
-#    make && \
-#    make install && \
-#    make clean
-#ENV PATH $PATH:$PSRDADA_HOME/build/bin
-#ENV PSRDADA_BUILD $PSRDADA_HOME/build/
-#ENV PACKAGES $PSRDADA_BUILD
+COPY psrdada_cvs_login $PSRHOME
+RUN  chmod +x psrdada_cvs_login
+RUN  ./psrdada_cvs_login && \
+    cvs -z3 -d:pserver:anonymous@psrdada.cvs.sourceforge.net:/cvsroot/psrdada co -P psrdada
+ENV PSRDADA_HOME $PSRHOME/psrdada
+WORKDIR $PSRDADA_HOME
+RUN mkdir build/ && \
+    ./bootstrap && \
+    ./configure --prefix=$PSRDADA_HOME/build && \
+    make && \
+    make install && \
+    make clean
+ENV PATH $PATH:$PSRDADA_HOME/build/bin
+ENV PSRDADA_BUILD $PSRDADA_HOME/build/
+ENV PACKAGES $PSRDADA_BUILD
 
 # (added) cd into PSRHOME and git clone dedisp and heimdall repos
 WORKDIR $PSRHOME
 RUN git clone https://github.com/ewanbarr/dedisp.git && \
     git clone https://git.code.sf.net/p/heimdall-astro/code heimdall-astro-code 
+
+
+# (old error stuff)
 # 5 or 8??? errors complain about cuda-5.0
 # error:
 # /bin/sh: 1: /usr/local/cuda-5.0//bin/nvcc: not found
 # Makefile:46: recipe for target 'lib/libdedisp.so.1.0.1' failed
 # why are there two slashes?
-ENV PATH $PATH:/usr/local/cuda-5.0/bin
+#ENV PATH $PATH:/usr/local/cuda-5.0/bin
 # 64 bit
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda-5.0/lib64
+#ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda-5.0/lib64
 # 32 bit
 #ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda-8.0/lib
 
+COPY Makefile $PSRHOME/dedisp
 RUN cd $PSRHOME/dedisp && \
+    sed -i 's/cuda-5.0/cuda-8.0/g' 'Makefile.inc' && \
     make
+ENV LD_LIBRARY_PATH $PSRHOME/dedisp/lib    
 WORKDIR $PSRHOME
 RUN cd $PSRHOME/heimdall-astro-code && \
-    ./configure && \
-    make && \
+    ./bootstrap && \
+    ./configure --with-dedisp-lib-dir=$PSRHOME/dedisp/lib --with-dedisp-include-dir=$PSRHOME/dedisp/include  --with-cuda-dir=/usr/local/cuda && \
+    make -j 32 && \
     make check && \
     make install && \
     make installcheck && \

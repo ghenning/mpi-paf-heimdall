@@ -17,7 +17,6 @@ USER root
 
 # Create space for ssh daemon and update the system
 RUN echo 'deb http://us.archive.ubuntu.com/ubuntu trusty main multiverse' >> /etc/apt/sources.list && \
-    mkdir /var/run/sshd && \
     apt-get -y check && \
     apt-get -y update && \
     apt-get install -y apt-utils apt-transport-https software-properties-common python-software-properties && \
@@ -34,6 +33,7 @@ RUN apt-get --no-install-recommends -y install \
     libtool \
     csh \
     gcc \
+    g++ \
     gfortran \
     wget \
     git \
@@ -48,8 +48,6 @@ RUN apt-get --no-install-recommends -y install \
     libhwloc-dev \
     libboost1.58-all-dev \
     pkg-config \
-    cmake \
-    libtool \
     expect
 
 ENV PSRHOME /software/
@@ -57,12 +55,9 @@ ENV OSTYPE linux
 RUN mkdir -p $PSRHOME
 WORKDIR $PSRHOME
 
-RUN apt-get install lsof
-
-# (removed) Install PSRDADA
 COPY psrdada_cvs_login $PSRHOME
-RUN  chmod +x psrdada_cvs_login
-RUN  ./psrdada_cvs_login && \
+RUN  chmod +x psrdada_cvs_login &&\
+     ./psrdada_cvs_login && \
     cvs -z3 -d:pserver:anonymous@psrdada.cvs.sourceforge.net:/cvsroot/psrdada co -P psrdada
 ENV PSRDADA_HOME $PSRHOME/psrdada
 WORKDIR $PSRDADA_HOME
@@ -78,50 +73,21 @@ ENV PACKAGES $PSRDADA_BUILD
 
 # (added) cd into PSRHOME and git clone dedisp and heimdall repos
 WORKDIR $PSRHOME
-RUN git clone https://github.com/ajameson/dedisp.git && \
-    git clone https://git.code.sf.net/p/heimdall-astro/code heimdall-astro-code 
+ENV ARSE 1
+COPY dedisp $PSRHOME/dedisp
+COPY heimdall-astro-code $PSRHOME/heimdall-astro-code
 
-
-# (old error stuff)
-# 5 or 8??? errors complain about cuda-5.0
-# error:
-# /bin/sh: 1: /usr/local/cuda-5.0//bin/nvcc: not found
-# Makefile:46: recipe for target 'lib/libdedisp.so.1.0.1' failed
-# why are there two slashes?
-#ENV PATH $PATH:/usr/local/cuda-5.0/bin
-# 64 bit
-#ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda-5.0/lib64
-# 32 bit
-#ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda-8.0/lib
-
-RUN apt-get install g++
-
-COPY Makefile $PSRHOME/dedisp
 RUN cd $PSRHOME/dedisp && \
-    sed -i 's/cuda-5.0/cuda-8.0/g' 'Makefile.inc' && \
-    make
-ENV LD_LIBRARY_PATH $PSRHOME/dedisp/lib    
-WORKDIR $PSRHOME
+    make -j 4
 RUN cd $PSRHOME/heimdall-astro-code && \
     ./bootstrap && \
     ./configure --with-dedisp-lib-dir=$PSRHOME/dedisp/lib --with-dedisp-include-dir=$PSRHOME/dedisp/include  --with-cuda-dir=/usr/local/cuda && \
     cp libtool /usr/bin &&\
-    make -j 32 && \
+    make -j 4 && \
     make check && \
     make install && \
     make installcheck && \
     make clean
-
-
-
-#(removed) RUN git clone https://github.com/ewanbarr/psrdada_cpp.git && \
-#    cd psrdada_cpp/ &&\
-#    git checkout meerkat &&\
-#    mkdir build/ &&\
-#    cd build/ &&\
-#    cmake -DENABLE_CUDA=true ../ &&\
-#    make -j 4 &&\
-#    make install
 
 RUN env | awk '{print "export ",$0}' > $HOME/.profile && \
     echo "source $HOME/.profile" >> $HOME/.bashrc

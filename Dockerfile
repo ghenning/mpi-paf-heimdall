@@ -78,7 +78,7 @@ ENV PACKAGES $PSRDADA_BUILD
 
 # (added) cd into PSRHOME and git clone dedisp and heimdall repos
 WORKDIR $PSRHOME
-RUN git clone https://github.com/ewanbarr/dedisp.git && \
+RUN git clone https://github.com/ajameson/dedisp.git && \
     git clone https://git.code.sf.net/p/heimdall-astro/code heimdall-astro-code 
 
 
@@ -94,6 +94,8 @@ RUN git clone https://github.com/ewanbarr/dedisp.git && \
 # 32 bit
 #ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda-8.0/lib
 
+RUN apt-get install g++
+
 COPY Makefile $PSRHOME/dedisp
 RUN cd $PSRHOME/dedisp && \
     sed -i 's/cuda-5.0/cuda-8.0/g' 'Makefile.inc' && \
@@ -103,12 +105,15 @@ WORKDIR $PSRHOME
 RUN cd $PSRHOME/heimdall-astro-code && \
     ./bootstrap && \
     ./configure --with-dedisp-lib-dir=$PSRHOME/dedisp/lib --with-dedisp-include-dir=$PSRHOME/dedisp/include  --with-cuda-dir=/usr/local/cuda && \
+    cp libtool /usr/bin &&\
     make -j 32 && \
     make check && \
     make install && \
     make installcheck && \
     make clean
-    
+
+
+
 #(removed) RUN git clone https://github.com/ewanbarr/psrdada_cpp.git && \
 #    cd psrdada_cpp/ &&\
 #    git checkout meerkat &&\
